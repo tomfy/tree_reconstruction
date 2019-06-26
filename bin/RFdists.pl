@@ -51,7 +51,7 @@ printf ( #"%s  %s    "
          "TvR:  %6.4f  %6.4f  %4.2f  %6.4f   RvR:  %6.4f  %6.4f  %4.2f  %6.4f   %s\n", 
              # $true_tree_file, $recon_trees_file,
          $true_v_recon_rfd_histogram[0]/$n_tvr, $tvr_mean, $tvr_med, $tvr_stderr,
-         ($n_rvr >= 1)? $recon_v_recon_rfd_histogram[0]/$n_rvr : '---', $rvr_mean, $rvr_med, $rvr_stderr,
+         ($n_rvr >= 1)? $recon_v_recon_rfd_histogram[0]/$n_rvr : -1, $rvr_mean, $rvr_med, $rvr_stderr,
          $hist_str);
 
 my @files_to_rm = split(" ", `ls *.raxml_rfds`);
