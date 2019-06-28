@@ -6,6 +6,8 @@ use Data::Dumper;
 use Math::GSL::RNG;
 use Math::GSL::Randist qw ( :all );
 
+my $MAXITERATIONS = 100;
+
 my $RNG = Math::GSL::RNG->new();
 my $input_pattern = shift;
 my @input_filenames = split(" ", `ls $input_pattern`);
@@ -113,11 +115,15 @@ if ($n_points == 1) {
    my $solution;
    my @ns = map(int($Nreps*$_+0.1), @fcs);
    my ($max_dev, $avg_dev, $fopt) = fit(xdata => \@cols_to_use, ydata => \@fcs, terms => 2, impl_lang => "coderef");
-   print STDERR "$max_dev $avg_dev \n" if($verbose); # it;
-   for my $k ($cols_to_use[0]..$cols_to_use[3]){
-      print STDERR "$k  ", $fopt->($k), "\n";
-   }
+   print STDERR "max, avg devs: $max_dev $avg_dev \n" if($verbose); # it;
+   # for my $k ($cols_to_use[0]..$cols_to_use[3]){
+   #    print STDERR "$k  ", $fopt->($k), "\n";
+   # }
    my ($x_soln, $dy, $iterations) = solve_binary($fopt, $threshhold, $cols_to_use[0], $cols_to_use[-1]);
+   print STDERR "$x_soln  $dy  $iterations \n";
+   if($iterations > $MAXITERATIONS){
+      $x_soln = linear_interp(\@cols_to_use, \@fcs, $threshhold);
+   }
    $solution = $x_soln;
    
  #  my $s = '';
@@ -130,23 +136,28 @@ if ($n_points == 1) {
  #  print "$s \n";
 
    my $M = $Ndraw;
+my $good_count = 0;
    my ($xsum, $xsumsq) = (0.0, 0.0);
    for my $i (1..$M){
     my $ppfcs = get_pp_fs(\@ns, $Nreps, $RNG);
-      my ($max_dev, $avg_dev, $fopt) = fit(xdata => \@cols_to_use, ydata => $ppfcs, terms => 2, impl_lang => "coderef");
+      my ($max_dev, $avg_dev, $fopt) = fit(xdata => \@cols_to_use, ydata => $ppfcs, terms => 2, impl_lang => "coderef", iterations => 1000);
+print STDERR "max, avg devs: $max_dev $avg_dev \n" if($verbose); # it;
       my ($x_soln, $dy, $iterations) = solve_binary($fopt, $threshhold, $cols_to_use[0], $cols_to_use[-1]);
 
  #   print STDERR "iterations, time:  ", Algorithm::CurveFit::Simple->$STATS_H->{fit_iter}, "  ", Algorithm::CurveFit::Simple->$STATS_H->{fit_time}, "\n";
       print STDERR "$x_soln $dy $iterations \n" if($verbose);
+    if($iterations <= $Ndraw){
     $xsum += $x_soln;
     $xsumsq += $x_soln*$x_soln;
+    $good_count++;
+ }
    }
-   $xsum /= $M;
-   $xsumsq /= $M;
+   $xsum /= $good_count;
+   $xsumsq /= $good_count;
    my $sigma = sqrt($xsumsq - $xsum*$xsum);
    my $unc = sqrt(($solution - $xsum)**2 + $sigma**2);
    print "$treename $model $branch_length $threshhold   $solution +- $unc   ";
-   print "$xsum +- $sigma $M  $iterations \n";
+   print "$xsum +- $sigma $good_count  $iterations \n";
 }
 
 }
@@ -170,7 +181,20 @@ push @ppfcs, gsl_ran_beta($rng->raw(), $n+1, $N-$n+1);
 return \@ppfcs;
 }
 
-
+sub linear_interp{
+my $xs = shift;
+my $ys = shift;
+my $ytarget = shift;
+my $xresult;
+my $n = scalar @$xs;
+for my $i (0..$n-2){
+   if($ys->[$i] <= $ytarget and $ys->[$i+1] >= $ytarget){
+      $xresult = $xs->[$i] + ($ytarget - $ys->[$i])*($xs->[$i+1] - $xs->[$i])/($ys->[$i+1] - $ys->[$i]);
+      return $xresult;
+   }
+}
+return undef;
+}
 
   sub binomial_stderr{
      my $n = shift;
@@ -188,10 +212,10 @@ sub solve_binary{
    my $x;
    my $dy = shift // $Y/1000;
    my $res = 10000000;
-   for my $i (1..100) {
+   for my $i (1..$MAXITERATIONS) {
       $x = 0.5*($xL + $xR);
       my $ynew = $f->($x);
-      print STDERR "$x $ynew $i \n" if($verbose);
+ #     print STDERR "$x $ynew $i \n" if($verbose);
       $res = $ynew - $Y;
       return ($x, $res, $i) if(abs($res) <= $dy);
       if ($yL < $Y  and  $yR > $Y) {
