@@ -1,0 +1,116 @@
+#!/usr/bin/perl -w
+use strict;
+use Algorithm::CurveFit;
+use Data::Dumper;
+
+my $threshhold = shift // 0.9; # we will interpolate to find the alignment length s.t. that topo is correct this fraction of time.
+my $Nreps = shift // 1000;
+my %ncols_fc = ();
+while(<>){
+	my @cols = split(" ", $_);
+	my ($treename, $bl, $ncols, $model, $fc) = @cols[1,3,5,7,9];
+	my $tree_size = ($treename =~ /t(\d+)u/)? $1 : die "input line has unexpected treename: $treename \n";
+	my $stderr = binomial_stderr($Nreps, $fc);
+	$ncols_fc{$ncols} = "$fc $stderr";
+}
+
+my @ncols = sort {$a <=> $b} keys %ncols_fc;
+print "#  ", join(", ", @ncols), "\n";
+
+my %ncols_lofc = ();
+my %ncols_hifc = ();
+
+for my $icols (@ncols){
+
+	my ($fc, $se) = split(" ", $ncols_fc{$icols});
+	if($fc < $threshhold){
+		$ncols_lofc{$icols} = "$fc $se";
+	}else{
+		$ncols_hifc{$icols} = "$fc $se";
+	}
+}
+
+my $nlo = scalar keys %ncols_lofc;
+my $nhi = scalar keys %ncols_hifc;
+my @locols = sort {$a <=> $b} keys %ncols_lofc;
+my @hicols = sort {$a <=> $b} keys %ncols_hifc;
+
+my @cols_to_use = ();
+if($nlo == 0  or  $nhi == 0){
+	die "points don't straddle threshhold. $nlo  $nhi \n";
+}
+if($nlo == 1){
+	if($nhi == 1){
+# linear interpolation:
+		@cols_to_use = (@locols, @hicols);
+	}else{
+		if($nhi == 2){ # 3 points total
+			@cols_to_use = (@locols, @hicols);
+		}else{ # $nhi >= 3
+			@cols_to_use = (@locols, @hicols[0..2]);
+		}
+	}
+}else{ # $nlo >= 2
+	if($nhi == 1){
+		if($nlo == 2){
+			@cols_to_use = (@locols, @hicols);
+		}else{ # $nlo > 2
+			@cols_to_use = (@locols, @hicols);
+		}
+	}else{
+		@cols_to_use = (@locols[-2,-1], @hicols[0,1]); # 2 of each - usual case
+	}
+}
+
+
+my @fcs = ();
+my @ses = ();
+for(@cols_to_use){
+	print "$_ ", $ncols_fc{$_}, "\n";
+	my ($fc, $se) = split(" ", $ncols_fc{$_});
+	push @fcs, $fc;
+	push @ses, $se;
+} 
+
+my $n_points = scalar @cols_to_use;
+if($n_points == 1){
+	die "only 1 point? \n";
+}elsif($n_points == 2){
+
+}elsif($n_points == 3){
+	my $formula = 'c + b*x + a*x^2';
+	my $variable = 'x';
+	for(@cols_to_use){
+
+	}
+}elsif($n_point == 4){
+	my $formula = 'c + b*x + a*x^2';
+	my $variable = 'x';
+	my $slope_crude = ($fcs[3] - $fcs[0])/($ncols_to_use[3] - $ncols_to_use[0]);
+	my $yintercept_crude = $fcs[0] - $slope_crude*$n_cols_to_use[0];
+	my $quad_crude = 0.0;
+	@parameters = (
+			['a', $quad_crude, 0.001],
+			['b', $slope_crude, 0.0001],
+			['c', $yintercept_crude, 0.001]
+		      );
+	my $max_iter = 200;
+	my $square_residual = Algorithm::CurveFit->curve_fit(
+	formula => $formula,
+	params => @parameters,
+	variable => $variable,
+	xdata => @cols_to_use,
+	ydata => @fcs,
+	maximum_iterations => $max_iter,
+	
+);
+print Dumper \@parameters
+}
+
+
+
+sub binomial_stderr{
+	my $n = shift;
+	my $p = shift;
+	return sqrt($p*(1.0-$p)/$n);
+}

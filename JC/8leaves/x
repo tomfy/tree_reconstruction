@@ -1,0 +1,2 @@
+readline() on closed filehandle $fhin_true at /home/tomfy/Tree_reconstruction_studies/bin/splits_presence.pl line 49.
+readline() on closed filehandle $fhin_recons at /home/tomfy/Tree_reconstruction_studies/bin/splits_presence.pl line 78.
